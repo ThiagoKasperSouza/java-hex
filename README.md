@@ -229,6 +229,42 @@ bash ./gradlew bootRun
 
 ---
 
+## 🧪 Rodar os testes
+
+Os testes são executados com o **JDK 25** e o **Gradle wrapper**. O `gradlew` precisa ter permissão de execução — se necessário, rode `chmod +x gradlew` uma vez.
+
+> ⚠️ **Não use `sudo`** para rodar o Gradle. Execute sempre como seu usuário normal (você já está no grupo `docker`).
+
+### Executar todos os testes
+
+```bash
+cd /home/thiag/java-hex
+export JAVA_HOME=/caminho/para/jdk-25   # se o JDK 25 não for o padrão do PATH
+./gradlew test
+```
+
+> ⚠️ O teste de integração usa **Testcontainers**, que sobe um PostgreSQL real. Portanto, o **daemon do Docker precisa estar em execução** — confirme com `docker info`.
+
+### Estrutura dos testes
+
+| Camada | Classe | O que cobre |
+|--------|--------|-------------|
+| Domínio | `NewsTest` | Regras de negócio: título e conteúdo obrigatórios. |
+| Casos de uso | `CreateNewsUseCaseTest` · `FindNewsByIdUseCaseTest` · `ListNewsUseCaseTest` · `DeleteNewsUseCaseTest` | Lógica dos casos de uso com repositório mockado (Mockito). |
+| Controller | `NewsControllerTest` | Endpoints HTTP (200/201/204/400/404) via MockMvc. |
+| Integração | `MainApplicationTests` | Ponta a ponta com PostgreSQL real (Testcontainers) + `data.sql`. |
+
+### Rodar um teste específico
+
+```bash
+./gradlew test --tests "NewsControllerTest"
+./gradlew test --tests "MainApplicationTests"
+```
+
+Após a execução, o relatório detalhado fica em `build/reports/tests/test/index.html`.
+
+---
+
 ## 📁 Configuração (`.env`)
 
 As variáveis de ambiente usadas pelo compose e pela aplicação estão em `.env`:
