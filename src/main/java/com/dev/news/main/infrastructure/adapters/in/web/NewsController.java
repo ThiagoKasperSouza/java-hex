@@ -4,9 +4,11 @@ import com.dev.news.main.application.usecases.news.CreateNewsUseCase;
 import com.dev.news.main.application.usecases.news.DeleteNewsUseCase;
 import com.dev.news.main.application.usecases.news.FindNewsByIdUseCase;
 import com.dev.news.main.application.usecases.news.ListNewsUseCase;
+import com.dev.news.main.application.usecases.news.UpdateNewsUseCase;
 import com.dev.news.main.domain.news.model.News;
 import com.dev.news.main.infrastructure.adapters.in.web.dto.CreateNewsRequest;
 import com.dev.news.main.infrastructure.adapters.in.web.dto.NewsResponse;
+import com.dev.news.main.infrastructure.adapters.in.web.dto.UpdateNewsRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,17 +24,20 @@ public class NewsController {
     private final FindNewsByIdUseCase findNewsByIdUseCase;
     private final ListNewsUseCase listNewsUseCase;
     private final DeleteNewsUseCase deleteNewsUseCase;
+    private final UpdateNewsUseCase updateNewsUseCase;
 
     public NewsController(
             CreateNewsUseCase createNewsUseCase,
             FindNewsByIdUseCase findNewsByIdUseCase,
             ListNewsUseCase listNewsUseCase,
-            DeleteNewsUseCase deleteNewsUseCase
+            DeleteNewsUseCase deleteNewsUseCase,
+            UpdateNewsUseCase updateNewsUseCase
     ) {
         this.createNewsUseCase = createNewsUseCase;
         this.findNewsByIdUseCase = findNewsByIdUseCase;
         this.listNewsUseCase = listNewsUseCase;
         this.deleteNewsUseCase = deleteNewsUseCase;
+        this.updateNewsUseCase = updateNewsUseCase;
     }
 
     @GetMapping
@@ -53,6 +58,12 @@ public class NewsController {
     public ResponseEntity<NewsResponse> create(@RequestBody CreateNewsRequest request) {
         News criada = createNewsUseCase.execute(request.title(), request.content());
         return ResponseEntity.status(HttpStatus.CREATED).body(NewsResponse.fromDomain(criada));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<NewsResponse> update(@PathVariable Long id, @RequestBody UpdateNewsRequest request) {
+        News atualizada = updateNewsUseCase.execute(id, request.title(), request.content());
+        return ResponseEntity.ok(NewsResponse.fromDomain(atualizada));
     }
 
     @DeleteMapping("/{id}")

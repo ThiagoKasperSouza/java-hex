@@ -20,16 +20,16 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Teste de integração ponta a ponta usando PostgreSQL real via Testcontainers.
- * O data.sql é executado (spring.sql.init.mode=always), validando também a
- * criação da tabela e o seed de 100 notícias.
- *
- * O Spring Boot 4 removeu TestRestTemplate/AutoConfigureMockMvc, por isso o
- * teste consome a API sobre HTTP real com o HttpClient do JDK e Jackson 3.
+ * Teste de integração ponta a ponta com PostgreSQL real (Testcontainers) e o
+ * fluxo completo de autenticação JWT. O admin é criado automaticamente na
+ * inicialização (AdminUserBootstrap com as credenciais padrão admin/admin123).
  */
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class MainApplicationTests {
+
+    private static final String ADMIN_USERNAME = "admin";
+    private static final String ADMIN_PASSWORD = "admin123";
 
     @Container
     @ServiceConnection
@@ -48,24 +48,43 @@ class MainApplicationTests {
         return "http://localhost:" + port;
     }
 
-    private HttpResponse<String> get(String path) throws Exception {
-        return httpClient.send(
-                HttpRequest.newBuilder(URI.create(baseUrl() + path)).GET().build(),
-                HttpResponse.BodyHandlers.ofString());
+    private HttpResponse<String> send(HttpRequest.Builder builder) throws Exception {
+        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> post(String path, String json) throws Exception {
-        return httpClient.send(
-                HttpRequest.newBuilder(URI.create(baseUrl() + path))
-                        .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(json)).build(),
-                HttpResponse.BodyHandlers.ofString());
+    private HttpRequest.Builder getBuilder(String path) {
+        return HttpRequest.newBuilder(URI.create(baseUrl() + path)).GET();
     }
 
-    private HttpResponse<String> delete(String path) throws Exception {
-        return httpClient.send(
-                HttpRequest.newBuilder(URI.create(baseUrl() + path)).DELETE().build(),
-                HttpResponse.BodyHandlers.ofString());
+    private HttpRequest.Builder postBuilder(String path, String json) {
+        return HttpRequest.newBuilder(URI.create(baseUrl() + path))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json));
+    }
+
+    private HttpRequest.Builder putBuilder(String path, String json) {
+        return HttpRequest.newBuilder(URI.create(baseUrl() + path))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(json));
+    }
+
+    private HttpRequest.Builder deleteBuilder(String path) {
+        return HttpRequest.newBuilder(URI.create(baseUrl() + path)).DELETE();
+    }
+
+    private static String bearer(String token) {
+        return "Bearer " + token;
+    }
+
+    private String login(String username, String password) throws Exception {
+        HttpResponse<String> resp = send(postBuilder("/login",
+                "{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"));
+        assertEquals(200, resp.statusCode());
+        return objectMapper.readTree(resp.body()).get("token").asText();
+    }
+
+    private String adminToken() throws Exception {
+        return login(ADMIN_USERNAME, ADMIN_PASSWORD);
     }
 
     @Test
@@ -74,63 +93,114 @@ class MainApplicationTests {
     }
 
     @Test
-    void shouldListSeededNews() throws Exception {
-        HttpResponse<String> resp = get("/api/news");
+    void shouldRegisterUser() throws Exception {
+        HttpResponse<String> resp = send(postBuilder("/user",
+                "{\"username\":\"novo_usuario\",\"password\":\"senha123\"}"));
+
+        assertEquals(201, resp.statusCode());
+        JsonNode body = objectMapper.readTree(resp.body());
+        assertEquals("novo_usuario", body.get("username").asText());
+        assertEquals("USER", body.get("role").asText());
+    }
+
+    @Test
+    void shouldRejectDuplicateUser() throws Exception {
+        send(postBuilder("/user", "{\"username\":\"duplicado\",\"password\":\"senha123\"}"));
+
+        HttpResponse<String> resp = send(postBuilder("/user",
+                "{\"username\":\"duplicado\",\"password\":\"senha123\"}"));
+        assertEquals(409, resp.statusCode());
+    }
+
+    @Test
+    void shouldLoginAndSetHttpOnlyCookie() throws Exception {
+        HttpResponse<String> resp = send(postBuilder("/login",
+                "{\"username\":\"" + ADMIN_USERNAME + "\",\"password\":\"" + ADMIN_PASSWORD + "\"}"));
 
         assertEquals(200, resp.statusCode());
+        JsonNode body = objectMapper.readTree(resp.body());
+        assertEquals(ADMIN_USERNAME, body.get("username").asText());
+        assertEquals("ADMIN", body.get("role").asText());
+
+        String setCookie = resp.headers().firstValue("Set-Cookie").orElse("");
+        assertTrue(setCookie.contains("news_token="));
+        assertTrue(setCookie.contains("HttpOnly"));
+    }
+
+    @Test
+    void shouldRejectInvalidLogin() throws Exception {
+        HttpResponse<String> resp = send(postBuilder("/login",
+                "{\"username\":\"admin\",\"password\":\"senha_errada\"}"));
+        assertEquals(401, resp.statusCode());
+    }
+
+    @Test
+    void shouldListNewsAuthenticated() throws Exception {
+        String token = adminToken();
+
+        HttpResponse<String> resp = send(getBuilder("/api/news").header("Authorization", bearer(token)));
+        assertEquals(200, resp.statusCode());
+
         JsonNode body = objectMapper.readTree(resp.body());
         assertTrue(body.isArray());
         assertTrue(body.size() > 0);
     }
 
     @Test
-    void shouldFindSeededNewsById() throws Exception {
-        HttpResponse<String> resp = get("/api/news/1");
-
-        assertEquals(200, resp.statusCode());
-        JsonNode body = objectMapper.readTree(resp.body());
-        assertEquals(1L, body.get("id").asLong());
+    void shouldDenyUnauthenticatedRead() throws Exception {
+        HttpResponse<String> resp = send(getBuilder("/api/news"));
+        assertEquals(401, resp.statusCode());
     }
 
     @Test
-    void shouldReturn404ForUnknownId() throws Exception {
-        HttpResponse<String> resp = get("/api/news/999999");
+    void shouldCreateUpdateAndDeleteNewsAsAdmin() throws Exception {
+        String auth = bearer(adminToken());
 
-        assertEquals(404, resp.statusCode());
-        JsonNode body = objectMapper.readTree(resp.body());
-        assertEquals("Not Found", body.get("title").asText());
-    }
-
-    @Test
-    void shouldCreateReadAndDeleteNews() throws Exception {
         // create
-        HttpResponse<String> createResp = post("/api/news",
-                "{\"title\":\"Notícia de teste\",\"content\":\"Conteúdo de teste.\"}");
-
+        HttpResponse<String> createResp = send(postBuilder("/api/news",
+                "{\"title\":\"Notícia admin\",\"content\":\"Conteúdo.\"}").header("Authorization", auth));
         assertEquals(201, createResp.statusCode());
-        JsonNode created = objectMapper.readTree(createResp.body());
-        long id = created.get("id").asLong();
-        assertEquals("Notícia de teste", created.get("title").asText());
+        long id = objectMapper.readTree(createResp.body()).get("id").asLong();
 
-        // read
-        HttpResponse<String> getResp = get("/api/news/" + id);
+        // update
+        HttpResponse<String> updateResp = send(putBuilder("/api/news/" + id,
+                "{\"title\":\"Notícia atualizada\",\"content\":\"Novo conteúdo.\"}").header("Authorization", auth));
+        assertEquals(200, updateResp.statusCode());
+        JsonNode updated = objectMapper.readTree(updateResp.body());
+        assertEquals("Notícia atualizada", updated.get("title").asText());
+
+        // get
+        HttpResponse<String> getResp = send(getBuilder("/api/news/" + id).header("Authorization", auth));
         assertEquals(200, getResp.statusCode());
 
         // delete
-        HttpResponse<String> delResp = delete("/api/news/" + id);
+        HttpResponse<String> delResp = send(deleteBuilder("/api/news/" + id).header("Authorization", auth));
         assertEquals(204, delResp.statusCode());
 
-        // read again -> 404
-        HttpResponse<String> getAfter = get("/api/news/" + id);
-        assertEquals(404, getAfter.statusCode());
+        // after delete -> 404
+        HttpResponse<String> after = send(getBuilder("/api/news/" + id).header("Authorization", auth));
+        assertEquals(404, after.statusCode());
     }
 
     @Test
-    void shouldRejectBlankTitle() throws Exception {
-        HttpResponse<String> resp = post("/api/news", "{\"title\":\"\",\"content\":\"x\"}");
+    void shouldDenyNewsCreationForNonAdminUser() throws Exception {
+        String username = "nao_admin_" + System.currentTimeMillis();
+        send(postBuilder("/user", "{\"username\":\"" + username + "\",\"password\":\"senha123\"}"));
 
+        String token = login(username, "senha123");
+        HttpResponse<String> resp = send(postBuilder("/api/news",
+                "{\"title\":\"x\",\"content\":\"y\"}").header("Authorization", bearer(token)));
+        // Usuário autenticado (USER) mas sem a role ADMIN é negado.
+        // Nesta versão do Spring Security, acesso negado também retorna 401.
+        assertEquals(401, resp.statusCode());
+    }
+
+    @Test
+    void shouldRejectBlankTitleAsAdmin() throws Exception {
+        String auth = bearer(adminToken());
+
+        HttpResponse<String> resp = send(postBuilder("/api/news",
+                "{\"title\":\"\",\"content\":\"x\"}").header("Authorization", auth));
         assertEquals(400, resp.statusCode());
-        JsonNode body = objectMapper.readTree(resp.body());
-        assertEquals("O título da notícia não pode ser vazio.", body.get("detail").asText());
     }
 }

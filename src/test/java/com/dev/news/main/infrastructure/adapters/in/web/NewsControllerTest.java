@@ -4,6 +4,7 @@ import com.dev.news.main.application.usecases.news.CreateNewsUseCase;
 import com.dev.news.main.application.usecases.news.DeleteNewsUseCase;
 import com.dev.news.main.application.usecases.news.FindNewsByIdUseCase;
 import com.dev.news.main.application.usecases.news.ListNewsUseCase;
+import com.dev.news.main.application.usecases.news.UpdateNewsUseCase;
 import com.dev.news.main.domain.news.exceptions.NewsNotFoundException;
 import com.dev.news.main.domain.news.model.News;
 import com.dev.news.main.infrastructure.adapters.in.web.exceptions.GlobalExceptionHandler;
@@ -22,6 +23,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -32,6 +34,7 @@ class NewsControllerTest {
     private FindNewsByIdUseCase findNewsByIdUseCase;
     private ListNewsUseCase listNewsUseCase;
     private DeleteNewsUseCase deleteNewsUseCase;
+    private UpdateNewsUseCase updateNewsUseCase;
     private MockMvc mockMvc;
 
     private static final News NEWS = new News(1L, "Titulo", "Conteudo", LocalDateTime.now());
@@ -42,9 +45,10 @@ class NewsControllerTest {
         findNewsByIdUseCase = mock(FindNewsByIdUseCase.class);
         listNewsUseCase = mock(ListNewsUseCase.class);
         deleteNewsUseCase = mock(DeleteNewsUseCase.class);
+        updateNewsUseCase = mock(UpdateNewsUseCase.class);
 
         NewsController controller = new NewsController(
-                createNewsUseCase, findNewsByIdUseCase, listNewsUseCase, deleteNewsUseCase);
+                createNewsUseCase, findNewsByIdUseCase, listNewsUseCase, deleteNewsUseCase, updateNewsUseCase);
 
         mockMvc = standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
@@ -103,6 +107,18 @@ class NewsControllerTest {
                         .content("{\"title\":\"\",\"content\":\"x\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("O título da notícia não pode ser vazio."));
+    }
+
+    @Test
+    void shouldUpdateNews() throws Exception {
+        when(updateNewsUseCase.execute(1L, "NovoTitulo", "NovoConteudo"))
+                .thenReturn(new News(1L, "NovoTitulo", "NovoConteudo", LocalDateTime.now()));
+
+        mockMvc.perform(put("/api/news/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"NovoTitulo\",\"content\":\"NovoConteudo\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("NovoTitulo"));
     }
 
     @Test

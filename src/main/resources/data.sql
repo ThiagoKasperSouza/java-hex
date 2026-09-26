@@ -5,6 +5,14 @@ CREATE TABLE IF NOT EXISTS news (
     created_at TIMESTAMP NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP NOT NULL
+);
+
 INSERT INTO news (title, content, created_at)
 SELECT t.title, t.content, t.created_at FROM (VALUES
 -- Tecnologia & Inovação

@@ -8,7 +8,7 @@
       "_id": "wrk_news",
       "type": "workspace",
       "name": "News API",
-      "description": "Collection de testes para a News API (arquitetura hexagonal, Spring Boot + PostgreSQL).",
+      "description": "Collection de testes para a News API (arquitetura hexagonal, Spring Boot + PostgreSQL + autenticação JWT via cookie httpOnly).",
       "_type": "workspace"
     },
     {
@@ -16,16 +16,70 @@
       "type": "environment",
       "name": "Base Environment",
       "data": {
-        "base_url": "http://localhost:8080"
+        "base_url": "http://localhost:8080",
+        "admin_username": "admin",
+        "admin_password": "admin123"
       },
       "_type": "environment",
       "parentId": "wrk_news"
     },
     {
+      "_id": "grp_auth",
+      "type": "request_group",
+      "name": "Autenticação",
+      "description": "Cadastro público (POST /user) e login (POST /login). O login define o cookie httpOnly 'news_token' automaticamente no Cookie Jar do Insomnia.",
+      "_type": "request_group",
+      "parentId": "wrk_news"
+    },
+    {
+      "_id": "req_register",
+      "type": "request",
+      "parentId": "grp_auth",
+      "name": "Cadastrar usuário",
+      "description": "POST /user — cadastro público. Sempre cria um usuário com role USER (não é possível auto-cadastrar como ADMIN). Resposta 201.",
+      "method": "POST",
+      "url": "{{ base_url }}/user",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"maria\",\n  \"password\": \"senha123\"\n}"
+      },
+      "_type": "request"
+    },
+    {
+      "_id": "req_login",
+      "type": "request",
+      "parentId": "grp_auth",
+      "name": "Login",
+      "description": "POST /login — autentica e define o cookie httpOnly 'news_token' (Set-Cookie). O Insomnia guarda esse cookie e o envia automaticamente nas próximas requisições. Também retorna o token no corpo. Credenciais padrão de ADMIN: admin / admin123. Resposta 200 (ou 401 se inválidas).",
+      "method": "POST",
+      "url": "{{ base_url }}/login",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"{{ _.admin_username }}\",\n  \"password\": \"{{ _.admin_password }}\"\n}"
+      },
+      "_type": "request"
+    },
+    {
       "_id": "grp_news",
       "type": "request_group",
       "name": "News",
-      "description": "Endpoints de /api/news",
+      "description": "Endpoints de /api/news. Requerem autenticação (rode Login antes). LEITURA: qualquer usuário autenticado. CRIAÇÃO, UPDATE e DELETE: apenas role ADMIN.",
       "_type": "request_group",
       "parentId": "wrk_news"
     },
@@ -34,7 +88,7 @@
       "type": "request",
       "parentId": "grp_news",
       "name": "Listar notícias",
-      "description": "GET /api/news — retorna todas as notícias (200 OK).",
+      "description": "GET /api/news — retorna todas as notícias. Requer autenticação (200 OK).",
       "method": "GET",
       "url": "{{ base_url }}/api/news",
       "headers": [],
@@ -48,7 +102,7 @@
       "type": "request",
       "parentId": "grp_news",
       "name": "Buscar notícia por ID",
-      "description": "GET /api/news/{id} — retorna uma notícia (200) ou 404 se não existir.",
+      "description": "GET /api/news/{id} — retorna uma notícia (200) ou 404 se não existir. Requer autenticação.",
       "method": "GET",
       "url": "{{ base_url }}/api/news/1",
       "headers": [],
@@ -61,8 +115,8 @@
       "_id": "req_create",
       "type": "request",
       "parentId": "grp_news",
-      "name": "Criar notícia",
-      "description": "POST /api/news — cria uma notícia. Regra de negócio: título e conteúdo são obrigatórios (valores vazios retornam 400).",
+      "name": "Criar notícia (ADMIN)",
+      "description": "POST /api/news — cria uma notícia. APENAS ADMIN (usuário comum recebe 401). Regra de negócio: título e conteúdo obrigatórios (vazios retornam 400). Resposta 201.",
       "method": "POST",
       "url": "{{ base_url }}/api/news",
       "headers": [
@@ -80,11 +134,33 @@
       "_type": "request"
     },
     {
+      "_id": "req_update",
+      "type": "request",
+      "parentId": "grp_news",
+      "name": "Atualizar notícia (ADMIN)",
+      "description": "PUT /api/news/{id} — atualiza título e conteúdo. APENAS ADMIN (usuário comum recebe 401). 404 se a notícia não existir. Resposta 200.",
+      "method": "PUT",
+      "url": "{{ base_url }}/api/news/1",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"title\": \"Título atualizado\",\n  \"content\": \"Conteúdo atualizado via Insomnia.\"\n}"
+      },
+      "_type": "request"
+    },
+    {
       "_id": "req_delete",
       "type": "request",
       "parentId": "grp_news",
-      "name": "Deletar notícia",
-      "description": "DELETE /api/news/{id} — remove uma notícia (204) ou 404 se não existir.",
+      "name": "Deletar notícia (ADMIN)",
+      "description": "DELETE /api/news/{id} — remove uma notícia. APENAS ADMIN (usuário comum recebe 401). Resposta 204 (404 se não existir).",
       "method": "DELETE",
       "url": "{{ base_url }}/api/news/1",
       "headers": [],
