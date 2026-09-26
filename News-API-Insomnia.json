@@ -1,0 +1,97 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-09-26T00:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v2026.1.0",
+  "resources": [
+    {
+      "_id": "wrk_news",
+      "type": "workspace",
+      "name": "News API",
+      "description": "Collection de testes para a News API (arquitetura hexagonal, Spring Boot + PostgreSQL).",
+      "_type": "workspace"
+    },
+    {
+      "_id": "env_news",
+      "type": "environment",
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://localhost:8080"
+      },
+      "_type": "environment",
+      "parentId": "wrk_news"
+    },
+    {
+      "_id": "grp_news",
+      "type": "request_group",
+      "name": "News",
+      "description": "Endpoints de /api/news",
+      "_type": "request_group",
+      "parentId": "wrk_news"
+    },
+    {
+      "_id": "req_list",
+      "type": "request",
+      "parentId": "grp_news",
+      "name": "Listar notícias",
+      "description": "GET /api/news — retorna todas as notícias (200 OK).",
+      "method": "GET",
+      "url": "{{ base_url }}/api/news",
+      "headers": [],
+      "authentication": {},
+      "parameters": [],
+      "body": {},
+      "_type": "request"
+    },
+    {
+      "_id": "req_get",
+      "type": "request",
+      "parentId": "grp_news",
+      "name": "Buscar notícia por ID",
+      "description": "GET /api/news/{id} — retorna uma notícia (200) ou 404 se não existir.",
+      "method": "GET",
+      "url": "{{ base_url }}/api/news/1",
+      "headers": [],
+      "authentication": {},
+      "parameters": [],
+      "body": {},
+      "_type": "request"
+    },
+    {
+      "_id": "req_create",
+      "type": "request",
+      "parentId": "grp_news",
+      "name": "Criar notícia",
+      "description": "POST /api/news — cria uma notícia. Regra de negócio: título e conteúdo são obrigatórios (valores vazios retornam 400).",
+      "method": "POST",
+      "url": "{{ base_url }}/api/news",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"title\": \"Minha primeira notícia\",\n  \"content\": \"Conteúdo criado via Insomnia.\"\n}"
+      },
+      "_type": "request"
+    },
+    {
+      "_id": "req_delete",
+      "type": "request",
+      "parentId": "grp_news",
+      "name": "Deletar notícia",
+      "description": "DELETE /api/news/{id} — remove uma notícia (204) ou 404 se não existir.",
+      "method": "DELETE",
+      "url": "{{ base_url }}/api/news/1",
+      "headers": [],
+      "authentication": {},
+      "parameters": [],
+      "body": {},
+      "_type": "request"
+    }
+  ]
+}
